@@ -1,102 +1,158 @@
 <template>
     <lightning-card title="Risk Advisor" icon-name="utility:shield">
-        <!-- Loading state -->
-        <template lwc:if={isLoading}>
-            <div class="slds-align_absolute-center slds-p-around_medium">
-                <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
-            </div>
-        </template>
 
-        <!-- Error state -->
-        <template lwc:elseif={isError}>
+        <!-- Home Page: Search mode (no recordId, no selected opp) -->
+        <template lwc:if={isSearchMode}>
             <div class="slds-p-around_medium">
-                <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
-                    <span class="slds-assistive-text">Error</span>
-                    <h2>{errorMessage}</h2>
-                </div>
-            </div>
-        </template>
-
-        <!-- No assessment state -->
-        <template lwc:elseif={isNoAssessment}>
-            <div class="slds-p-around_medium slds-text-align_center">
-                <lightning-icon icon-name="utility:info" size="small"></lightning-icon>
-                <p class="slds-m-top_small slds-text-color_weak">{labelNoAssessment}</p>
-            </div>
-        </template>
-
-        <!-- Pending state -->
-        <template lwc:elseif={isPending}>
-            <div class="slds-p-around_medium slds-text-align_center">
-                <lightning-spinner alternative-text="Assessing" size="small"></lightning-spinner>
-                <p class="slds-m-top_small slds-text-color_weak">{labelPending}</p>
-            </div>
-        </template>
-
-        <!-- Completed state -->
-        <template lwc:elseif={isCompleted}>
-            <div class="slds-p-around_medium">
-                <!-- Risk level badge -->
-                <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
-                    <div class="slds-col slds-size_1-of-2">
-                        <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Risk Level</p>
-                        <span class={riskLevelClass}>{assessment.Risk_Level__c}</span>
-                    </div>
-                    <div class="slds-col slds-size_1-of-2">
-                        <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Risk Score</p>
-                        <p class="slds-text-heading_large">{assessment.Risk_Score__c}<span class="slds-text-body_small"> / 100</span></p>
-                    </div>
-                </div>
-
-                <!-- Score progress bar -->
-                <div class="score-bar-container slds-m-bottom_medium">
-                    <div class="score-bar" style={scoreBarStyle}></div>
-                </div>
-
-                <!-- Articles -->
-                <template lwc:if={hasArticles}>
-                    <div class="slds-m-bottom_medium">
-                        <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_x-small">Latest Headlines</p>
-                        <ul class="slds-list_dotted">
-                            <template for:each={headlines} for:item="headline">
-                                <li key={headline} class="slds-text-body_small slds-m-bottom_xx-small">{headline}</li>
+                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
+                    Search for an Opportunity to view its risk assessment.
+                </p>
+                <div class="search-container">
+                    <lightning-input
+                        type="search"
+                        label="Search Opportunities"
+                        placeholder="Type an opportunity name..."
+                        value={searchTerm}
+                        onchange={handleSearchInput}>
+                    </lightning-input>
+                    <template lwc:if={isSearching}>
+                        <div class="slds-p-around_x-small">
+                            <lightning-spinner alternative-text="Searching" size="x-small"></lightning-spinner>
+                        </div>
+                    </template>
+                    <template lwc:if={hasSearchResults}>
+                        <ul class="search-dropdown slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid">
+                            <template for:each={searchResults} for:item="opp">
+                                <li key={opp.Id}
+                                    class="slds-media slds-listbox__item search-result-item"
+                                    role="option"
+                                    data-id={opp.Id}
+                                    onclick={handleSelectOpp}>
+                                    <span class="slds-media__figure slds-listbox__option-icon">
+                                        <lightning-icon icon-name="standard:opportunity" size="x-small"></lightning-icon>
+                                    </span>
+                                    <span class="slds-media__body">
+                                        <span class="slds-listbox__option-text slds-listbox__option-text_entity">{opp.Name}</span>
+                                        <span class="slds-listbox__option-meta slds-text-color_weak">{opp.Account.Name}</span>
+                                    </span>
+                                </li>
                             </template>
                         </ul>
-                    </div>
-                </template>
-
-                <!-- Recommendation -->
-                <template lwc:if={assessment.Recommendation__c}>
-                    <div class="recommendation-box slds-m-bottom_medium">
-                        <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Recommendation</p>
-                        <p class="slds-text-body_small">{assessment.Recommendation__c}</p>
-                    </div>
-                </template>
-
-                <!-- Assessment date -->
-                <p class="slds-text-body_small slds-text-color_weak">
-                    Last assessed: <lightning-formatted-date-time
-                        value={assessment.Assessment_Date__c}
-                        year="numeric"
-                        month="short"
-                        day="numeric"
-                        hour="2-digit"
-                        minute="2-digit">
-                    </lightning-formatted-date-time>
-                </p>
+                    </template>
+                </div>
             </div>
+        </template>
 
-            <!-- Footer: Re-Assessment button (Manager only) -->
-            <template lwc:if={hasManualPermission}>
-                <div slot="footer" class="slds-text-align_right">
-                    <lightning-button
-                        label="Request Re-Assessment"
-                        icon-name="utility:refresh"
-                        onclick={handleRequestAssessment}
-                        disabled={isRequestingAssessment}>
-                    </lightning-button>
+        <!-- Dashboard (record page mode OR home page after selection) -->
+        <template lwc:else>
+            <!-- Back link for Home Page mode -->
+            <template lwc:if={isHomePage}>
+                <div class="slds-p-horizontal_medium slds-p-top_small">
+                    <a onclick={handleBack} class="back-link slds-text-body_small">
+                        &#8592; Back to search
+                    </a>
                 </div>
             </template>
+
+            <!-- Loading state -->
+            <template lwc:if={isLoading}>
+                <div class="slds-align_absolute-center slds-p-around_medium">
+                    <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+                </div>
+            </template>
+
+            <!-- Error state -->
+            <template lwc:elseif={isError}>
+                <div class="slds-p-around_medium">
+                    <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
+                        <span class="slds-assistive-text">Error</span>
+                        <h2>{errorMessage}</h2>
+                    </div>
+                </div>
+            </template>
+
+            <!-- No assessment state -->
+            <template lwc:elseif={isNoAssessment}>
+                <div class="slds-p-around_medium slds-text-align_center">
+                    <lightning-icon icon-name="utility:info" size="small"></lightning-icon>
+                    <p class="slds-m-top_small slds-text-color_weak">{labelNoAssessment}</p>
+                </div>
+            </template>
+
+            <!-- Pending state -->
+            <template lwc:elseif={isPending}>
+                <div class="slds-p-around_medium slds-text-align_center">
+                    <lightning-spinner alternative-text="Assessing" size="small"></lightning-spinner>
+                    <p class="slds-m-top_small slds-text-color_weak">{labelPending}</p>
+                </div>
+            </template>
+
+            <!-- Completed state -->
+            <template lwc:elseif={isCompleted}>
+                <div class="slds-p-around_medium">
+                    <!-- Risk level badge -->
+                    <div class="slds-grid slds-gutters slds-wrap slds-m-bottom_medium">
+                        <div class="slds-col slds-size_1-of-2">
+                            <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Risk Level</p>
+                            <span class={riskLevelClass}>{assessment.Risk_Level__c}</span>
+                        </div>
+                        <div class="slds-col slds-size_1-of-2">
+                            <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Risk Score</p>
+                            <p class="slds-text-heading_large">{assessment.Risk_Score__c}<span class="slds-text-body_small"> / 100</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Score progress bar -->
+                    <div class="score-bar-container slds-m-bottom_medium">
+                        <div class="score-bar" style={scoreBarStyle}></div>
+                    </div>
+
+                    <!-- Articles -->
+                    <template lwc:if={hasArticles}>
+                        <div class="slds-m-bottom_medium">
+                            <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_x-small">Latest Headlines</p>
+                            <ul class="slds-list_dotted">
+                                <template for:each={headlines} for:item="headline">
+                                    <li key={headline} class="slds-text-body_small slds-m-bottom_xx-small">{headline}</li>
+                                </template>
+                            </ul>
+                        </div>
+                    </template>
+
+                    <!-- Recommendation -->
+                    <template lwc:if={assessment.Recommendation__c}>
+                        <div class="recommendation-box slds-m-bottom_medium">
+                            <p class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Recommendation</p>
+                            <p class="slds-text-body_small">{assessment.Recommendation__c}</p>
+                        </div>
+                    </template>
+
+                    <!-- Assessment date -->
+                    <p class="slds-text-body_small slds-text-color_weak">
+                        Last assessed: <lightning-formatted-date-time
+                            value={assessment.Assessment_Date__c}
+                            year="numeric"
+                            month="short"
+                            day="numeric"
+                            hour="2-digit"
+                            minute="2-digit">
+                        </lightning-formatted-date-time>
+                    </p>
+                </div>
+
+                <!-- Footer: Re-Assessment button (Manager only) -->
+                <template lwc:if={hasManualPermission}>
+                    <div slot="footer" class="slds-text-align_right">
+                        <lightning-button
+                            label="Request Re-Assessment"
+                            icon-name="utility:refresh"
+                            onclick={handleRequestAssessment}
+                            disabled={isRequestingAssessment}>
+                        </lightning-button>
+                    </div>
+                </template>
+            </template>
         </template>
+
     </lightning-card>
 </template>

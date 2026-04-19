@@ -4,6 +4,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getLatestAssessment from '@salesforce/apex/RiskAssessmentController.getLatestAssessment';
 import requestManualAssessment from '@salesforce/apex/RiskAssessmentController.requestManualAssessment';
 import hasManualAssessmentPermission from '@salesforce/apex/RiskAssessmentController.hasManualAssessmentPermission';
+import searchOpportunities from '@salesforce/apex/RiskAssessmentController.searchOpportunities';
 import LABEL_TIMEOUT from '@salesforce/label/c.Risk_Callout_Timeout';
 import LABEL_LOW_RISK from '@salesforce/label/c.Risk_Low_Recommendation';
 import LABEL_HIGH_RISK from '@salesforce/label/c.Risk_High_Recommendation';
@@ -13,6 +14,7 @@ import OPP_NAME_FIELD from '@salesforce/schema/Opportunity.Name';
 import OPP_AMOUNT_FIELD from '@salesforce/schema/Opportunity.Amount';
 
 const POLL_INTERVAL_MS = 5000;
+const DEBOUNCE_MS = 300;
 const RISK_LEVEL_CSS = {
     Low: 'slds-badge risk-badge risk-badge_low',
     Medium: 'slds-badge risk-badge risk-badge_medium',
@@ -30,10 +32,14 @@ export default class OpportunityRiskDashboard extends LightningElement {
     @api recordId;
 
     @track assessment = null;
-    @track isLoading = true;
+    @track isLoading = false;
     @track errorMessage = null;
     @track hasManualPermission = false;
     @track isRequestingAssessment = false;
+    @track selectedOpportunityId = null;
+    @track searchResults = [];
+    @track searchTerm = '';
+    @track isSearching = false;
 
     labelPending = LABEL_PENDING;
     labelNoAssessment = LABEL_NO_ASSESS;
@@ -42,6 +48,7 @@ export default class OpportunityRiskDashboard extends LightningElement {
     labelHighRisk = LABEL_HIGH_RISK;
 
     _pollTimer = null;
+    _debounceTimer = null;
 
     @wire(getRecord, { recordId: '$recordId', fields: [OPP_NAME_FIELD, OPP_AMOUNT_FIELD] })
     wiredOpportunity({ error, data }) {
@@ -52,11 +59,33 @@ export default class OpportunityRiskDashboard extends LightningElement {
 
     connectedCallback() {
         this.loadPermission();
-        this.fetchAssessment();
+        if (this.recordId) {
+            this.isLoading = true;
+            this.fetchAssessment();
+        }
     }
 
     disconnectedCallback() {
         this.stopPolling();
+        if (this._debounceTimer) {
+            clearTimeout(this._debounceTimer);
+        }
+    }
+
+    get activeOpportunityId() {
+        return this.recordId || this.selectedOpportunityId;
+    }
+
+    get isSearchMode() {
+        return !this.recordId && !this.selectedOpportunityId;
+    }
+
+    get isHomePage() {
+        return !this.recordId;
+    }
+
+    get hasSearchResults() {
+        return this.searchResults && this.searchResults.length > 0;
     }
 
     async loadPermission() {
@@ -67,9 +96,58 @@ export default class OpportunityRiskDashboard extends LightningElement {
         }
     }
 
+    handleSearchInput(event) {
+        const term = event.target.value;
+        this.searchTerm = term;
+        this.searchResults = [];
+
+        if (this._debounceTimer) {
+            clearTimeout(this._debounceTimer);
+        }
+
+        if (!term || term.length < 2) {
+            return;
+        }
+
+        this._debounceTimer = setTimeout(async () => {
+            this.isSearching = true;
+            try {
+                this.searchResults = await searchOpportunities({ searchTerm: term });
+            } catch (e) {
+                this.searchResults = [];
+            } finally {
+                this.isSearching = false;
+            }
+        }, DEBOUNCE_MS);
+    }
+
+    handleSelectOpp(event) {
+        const oppId = event.currentTarget.dataset.id;
+        this.selectedOpportunityId = oppId;
+        this.searchResults = [];
+        this.searchTerm = '';
+        this.isLoading = true;
+        this.assessment = null;
+        this.errorMessage = null;
+        this.fetchAssessment();
+    }
+
+    handleBack() {
+        this.stopPolling();
+        this.selectedOpportunityId = null;
+        this.assessment = null;
+        this.errorMessage = null;
+        this.isLoading = false;
+        this.searchTerm = '';
+        this.searchResults = [];
+    }
+
     async fetchAssessment() {
+        const oppId = this.activeOpportunityId;
+        if (!oppId) return;
+
         try {
-            const result = await getLatestAssessment({ opportunityId: this.recordId });
+            const result = await getLatestAssessment({ opportunityId: oppId });
             this.assessment = result;
             this.errorMessage = null;
 
@@ -103,7 +181,7 @@ export default class OpportunityRiskDashboard extends LightningElement {
     async handleRequestAssessment() {
         this.isRequestingAssessment = true;
         try {
-            await requestManualAssessment({ opportunityId: this.recordId });
+            await requestManualAssessment({ opportunityId: this.activeOpportunityId });
             this.assessment = { Status__c: 'Pending' };
             this.startPolling();
             this.dispatchEvent(new ShowToastEvent({

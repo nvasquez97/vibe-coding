@@ -35,4 +35,16 @@ public with sharing class RiskAssessmentController {
     public static Boolean hasManualAssessmentPermission() {
         return FeatureManagement.checkPermission('Can_Request_Manual_Assessment');
     }
+
+    @AuraEnabled(cacheable=true)
+    public static List<Opportunity> searchOpportunities(String searchTerm) {
+        String likePattern = '%' + String.escapeSingleQuotes(searchTerm) + '%';
+        return [
+            SELECT Id, Name, Account.Name
+            FROM Opportunity
+            WHERE Name LIKE :likePattern
+            ORDER BY Name ASC
+            LIMIT 10
+        ];
+    }
 }
