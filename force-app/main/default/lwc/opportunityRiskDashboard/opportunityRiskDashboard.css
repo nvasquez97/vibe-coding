@@ -1,0 +1,48 @@
+.risk-badge {
+    font-size: 0.875rem;
+    font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    display: inline-block;
+}
+
+.risk-badge_low {
+    background-color: #4bca81;
+    color: #fff;
+}
+
+.risk-badge_medium {
+    background-color: #ffb75d;
+    color: #fff;
+}
+
+.risk-badge_high {
+    background-color: #fe9339;
+    color: #fff;
+}
+
+.risk-badge_critical {
+    background-color: #c23934;
+    color: #fff;
+}
+
+.score-bar-container {
+    width: 100%;
+    height: 12px;
+    background-color: #e0e5ee;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.score-bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.4s ease, background-color 0.4s ease;
+}
+
+.recommendation-box {
+    background-color: #f3f3f3;
+    border-left: 4px solid #0070d2;
+    padding: 0.75rem 1rem;
+    border-radius: 0 4px 4px 0;
+}
